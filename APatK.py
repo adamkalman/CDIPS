@@ -1,5 +1,3 @@
-
-
 def read_file_relevant( filename ):
   """Reads a file that contains only relevant IDs"""
   with open( filename ) as inFile:
@@ -11,7 +9,7 @@ def APatK ( predictedFileName, relevantIDsFileName, K ):
   """Calculates AP@k given a file with IDs
   sorted in order of relevance and a file with the 
   relevant IDs"""
-
+  
   relevantIDs = read_file_relevant( relevantIDsFileName )
 
   with open( predictedFileName) as predictedFile:
@@ -28,5 +26,3 @@ def APatK ( predictedFileName, relevantIDsFileName, K ):
         break
 
   return sum( listOfPrecisions ) / K 
-
-print APatK( "predictions.csv", "solution.csv", 32500 )

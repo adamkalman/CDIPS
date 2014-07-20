@@ -1,7 +1,6 @@
-#!/usr/bin/env python -tt
-# coding: utf-8
 """
-Benchmarks for the Avito fraud detection competition
+Code for the Avito fraud detection competition
+Adam Kalman, Aleksey Kocherzhenko, Henoch Wong
 """
 import csv
 import re
@@ -16,7 +15,9 @@ import random as rnd
 import logging
 from sklearn.externals import joblib
 from sklearn.metrics import roc_auc_score
+import APatK
 
+'''change dataFolder to the correct local path'''
 dataFolder = "/Users/adamkalman/Desktop/CDIPS/Data"
 
 stopwords= frozenset(word.decode('utf-8') for word in nltk.corpus.stopwords.words("russian") if word!="не")    
@@ -48,7 +49,7 @@ def getItems(fileName, itemsLimit=None):
             for row in countReader:
                 numItems += 1
             items_fd.seek(0)        
-            rnd.seed(0)
+            #rnd.seed(0)
             sampleIndexes = set(rnd.sample(range(numItems),itemsLimit))
             
         logging.info("Sampling done. Reading data...")
@@ -124,32 +125,39 @@ def processData(fileName, featureIndexes={}, itemsLimit=None):
             return features, item_ids
 
 def main():
-    global featureIndexes
-    global trainFeatures
-    global trainTargets
-    global trainItemIds
-    global testFeatures
-    global testItemIds
-    global predicted_scores
+    '''These global declarations only exist so the variables can be played with at the command line. Feel free to comment or uncomment them.'''
+    global featureIndexes #dict with 126229 entries {unicode word: frequency}
+    global trainFeatures #trainSize by 126229 sparse matrix with feature data for each training example
+    global trainTargets #a 0-1 list, len=trainSize, of human-provided answers to the training set
+    global trainItemIds #a list, len=trainSize, of id numbers for the ads in the training set
+    global crossvalFeatures #crossvalSize by 126229 sparse matrix with feature data for each cross-validation example
+    global crossvalTargets #a 0-1 list, len=crossvalSize, of human-provided answers to the cross-validation set
+    global crossvalItemIds #a list, len=crossvalSize, of id numbers for the ads in the cross-validation set
+    global testFeatures #1351242 by 126229 sparse matrix with feature data for each example in provided (fixed) test set
+    global testItemIds #a list, len=1351242, of id numbers for the ads in the provided (fixed) test set 
+    global predicted_scores #a list, len=crossvalSize, of predicted probabilities of is_blocked
 
-    """ Generates features and fits classifier. """
-    #uncomment the next 4 lines to rebuild train_data.pkl. It takes a few minutes.
-    #featureIndexes = processData(os.path.join(dataFolder,"avito_train.tsv"), itemsLimit=300000)
-    #trainFeatures,trainTargets, trainItemIds=processData(os.path.join(dataFolder,"avito_train.tsv"), featureIndexes, itemsLimit=300000)
+    #sum of these two can probably be up to about 4 million
+    trainSize = 300000 
+    crossvalSize = 100000
+    
+    '''uncomment the next 5 lines to rebuild train_data.pkl. It takes a few minutes.'''
+    #logging.info('Building train_data.pkl from provided training and test tsv files...')
+    #featureIndexes = processData(os.path.join(dataFolder,"avito_train.tsv"), itemsLimit=trainSize+crossvalSize)
+    #trainFeatures,trainTargets, trainItemIds=processData(os.path.join(dataFolder,"avito_train.tsv"), featureIndexes, itemsLimit=trainSize+crossvalSize)
     #testFeatures, testItemIds=processData(os.path.join(dataFolder,"avito_test.tsv"), featureIndexes)
     #joblib.dump((trainFeatures, trainTargets, trainItemIds, testFeatures, testItemIds), os.path.join(dataFolder,"train_data.pkl"))
     logging.info("Loading Data from 'train_data.pkl'...")
     trainFeatures, trainTargets, trainItemIds, testFeatures, testItemIds = joblib.load(os.path.join(dataFolder,"train_data.pkl"))
     
-    '''
-    print type(featureIndexes), len(featureIndexes)    #dict with 126229 entries (unicode word: its frequency)
-    print type(trainFeatures), trainFeatures.shape     #<class 'scipy.sparse.csr.csr_matrix'> (300000, 126229) #sparse matrix with feature data for each training example
-    print type(trainTargets), len(trainTargets)        #<type 'list'> 300000   #a 0-1 vector of human-provided answers to the training set
-    print type(trainItemIds), len(trainItemIds)        #<type 'list'> 300000   #a vector of id numbers for the ads in the training set
-    print type(testFeatures), testFeatures.shape       #<class 'scipy.sparse.csr.csr_matrix'> (1351242, 126229)  #sparse matrix with feature data for each example in test set
-    print type(testItemIds), len(testItemIds)          #<type 'list'> 1351242  #a vector of id numbers for the ads in the test set
-    '''
-        
+    logging.info('Splitting training data into training set and cross-validation set...')
+    crossvalFeatures = trainFeatures[:crossvalSize,:]
+    crossvalTargets = trainTargets[:crossvalSize]
+    crossvalItemIds = trainItemIds[:crossvalSize]
+    trainFeatures = trainFeatures[crossvalSize:,:]
+    trainTargets = trainTargets[crossvalSize:]
+    trainItemIds = trainItemIds[crossvalSize:]
+    
     logging.info("Feature preparation done, fitting model...")
     clf = SGDClassifier(    loss="log", 
                             penalty="l2", 
@@ -157,24 +165,43 @@ def main():
                             class_weight="auto")
     clf.fit(trainFeatures,trainTargets)
 
-    logging.info("Predicting...")
+    logging.info("Predicting results for cross-validation set...")
     
-    predicted_scores = clf.predict_proba(testFeatures).T[1] 
-    '''blahblahmodel.predict_proba(testFeatures) outputs a (1351242,2) matrix, with the probabilities of a yes or no in the two columns.
+    predicted_scores = clf.predict_proba(crossvalFeatures).T[1] 
+    '''blahblahmodel.predict_proba(foobarFeatures) outputs a (crossvalSize,2) matrix, with the probabilities of a yes or no in the two columns.
         Note that the second column is just 1 minus the first column. We set predicted_scores as the first column.'''
     
-    '''
-    logging.info("Write results...")
-    output_file = "avito_starter_solution.csv"
+    logging.info("Writing cross-validation predictions to cvpredictions.csv")
+    f = open('cvpredictions.csv','w')
+    f.write("id\n") #header
+    for pred_score, item_id in sorted(zip(predicted_scores, crossvalItemIds), reverse = True):
+        f.write("%d\n" % (item_id))
+    f.close()
+    
+    logging.info('Writing IDs of all confirmed blocked ads in cross-validation set to cvsolution.csv')
+    f = open('cvsolution.csv','w')
+    f.write("id\n") #header
+    for idx in xrange(len(crossvalTargets)):
+        if crossvalTargets[idx]:
+            f.write(str(crossvalItemIds[idx])+"\n")
+    f.close()
+    
+    print 'Average Precison over all cross-validation positives: ', APatK.APatK( "cvpredictions.csv", "cvsolution.csv", sum(crossvalTargets))
+
+    
+    '''uncomment this section when we are ready to submit to Kaggle
+    logging.info("Computing predictions for final submission...")
+    predicted_scores = clf.predict_proba(testFeatures).T[1] 
+    output_file = "solution_to_submit.csv"
     logging.info("Writing submission to %s" % output_file)
     f = open(os.path.join(dataFolder,output_file), "w")
     f.write("id\n")
-    
     for pred_score, item_id in sorted(zip(predicted_scores, testItemIds), reverse = True):
         f.write("%d\n" % (item_id))
     f.close()
-    logging.info("Done.")
     '''
+    
+    logging.info("Done.")
                                
 if __name__=="__main__":            
     main()            
