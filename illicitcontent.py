@@ -1,3 +1,5 @@
+#!/usr/bin/env python -tt
+# coding: utf-8
 """
 Code for the Avito fraud detection competition
 Adam Kalman, Aleksey Kocherzhenko, Henoch Wong
@@ -49,7 +51,7 @@ def getItems(fileName, itemsLimit=None):
             for row in countReader:
                 numItems += 1
             items_fd.seek(0)        
-            #rnd.seed(0)
+            rnd.seed()
             sampleIndexes = set(rnd.sample(range(numItems),itemsLimit))
             
         logging.info("Sampling done. Reading data...")
