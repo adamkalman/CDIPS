@@ -1,8 +1,10 @@
+import os
+
 def read_file_relevant( filename ):
   """Reads a file that contains only relevant IDs"""
-  with open( filename ) as inFile:
-     inFile.readline() #ignore header
-     relevantIDs = set( [line.strip() for line in inFile] )
+  with open( filename ) as inFile: # with open(os.path.join(scratchFolder,filename)) as inFile:
+    inFile.readline() #ignore header
+    relevantIDs = set( [line.strip() for line in inFile] )
   return relevantIDs
 
 def APatK ( predictedFileName, relevantIDsFileName, K ):
@@ -12,7 +14,7 @@ def APatK ( predictedFileName, relevantIDsFileName, K ):
   
   relevantIDs = read_file_relevant( relevantIDsFileName )
 
-  with open( predictedFileName) as predictedFile:
+  with open(predictedFileName) as predictedFile:
     predictedFile.readline() #ignore header
     countRelevants = 0
     listOfPrecisions = list()
@@ -26,3 +28,4 @@ def APatK ( predictedFileName, relevantIDsFileName, K ):
         break
 
   return sum( listOfPrecisions ) / K 
+#  return listOfPrecisions[-1]
